@@ -51,6 +51,12 @@ UKF::UKF() {
 
   Hint: one or more values initialized above might be wildly off...
   */
+
+  is_initialized_ = false;
+
+  x_ << 0,0,0,0,0;
+
+  P_ = MatrixXd::Identity(5,5);
 }
 
 UKF::~UKF() {}
