@@ -120,11 +120,12 @@ void UKF::Prediction(double delta_t) {
   */
 
   /// Augmented state and covariance
-  lambda_ = 3 - n_x_;
+  lambda_ = 3 - n_aug_;
 
   MatrixXd P_aug = MatrixXd(n_aug_,n_aug_);
   VectorXd x_aug_ = VectorXd(n_aug_);
   MatrixXd Xsig_aug = MatrixXd(n_aug_,2*n_aug_ + 1);
+  Xsig_pred_ = MatrixXd(n_x_,2*n_aug_ + 1);
 
   x_aug_.fill(0.0);
   x_aug_.head(n_x_) = x_;
@@ -171,6 +172,7 @@ void UKF::Prediction(double delta_t) {
     phi_p = phi + phidot*delta_t;
     phidot_p  = phidot;
 
+
     px_p += 0.5*nu_a*pow(delta_t,2.0)*cos(phi);
     py_p += 0.5*nu_a*pow(delta_t,2.0)*sin(phi);
     v_p += nu_a*delta_t;
@@ -186,7 +188,7 @@ void UKF::Prediction(double delta_t) {
   }
 
   /// Predict state and covariance matrix
-  weights_ = VectorXd(n_aug_);
+  weights_ = VectorXd(2*n_aug_ + 1);
   weights_(0) = lambda_/(lambda_ + n_aug_);
 
   for(int i = 1; i < 2*n_aug_ + 1; i++){
@@ -220,11 +222,13 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
   You'll also need to calculate the lidar NIS.
   */
 
-  MatrixXd H_laser(2,4);
-          H_laser << 1, 0, 0, 0,
-                     0, 1, 0, 0;
+  MatrixXd H_laser(2,5);
+          H_laser << 1, 0, 0, 0, 0,
+                     0, 1, 0, 0, 0;
+
   VectorXd z_pred = H_laser*x_;
   VectorXd z(2);
+
   z(0) = meas_package.raw_measurements_(0);
   z(1) = meas_package.raw_measurements_(1);
   MatrixXd R_(2,2);
@@ -276,6 +280,7 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
     double v = Xsig_pred_(2,i);
     double phi = Xsig_pred_(3,i);
     double phidot = Xsig_pred_(4,i);
+
 
     Zsig(0,i) = sqrt(pow(px,2.0) + pow(py,2.0));
     Zsig(1,i) = atan2(py,px);
