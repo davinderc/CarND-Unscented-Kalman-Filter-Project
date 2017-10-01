@@ -71,7 +71,6 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
   measurements.
   */
 
-  delta_t =;
   if (!is_initialized_) {
     x_.fill(0.0);
     n_x_ = 5;
@@ -202,7 +201,7 @@ void UKF::Prediction(double delta_t) {
   for(int i = 0; i < 2*n_aug_ + 1; i++){
     VectorXd xdiff(n_x_);
     xdiff = Xsig_pred_.col(i) - x_;
-    xdiff(3) = atan2(sin(xdiff(3)),cos(xdiff(3)_));
+    xdiff(3) = atan2(sin(xdiff(3)),cos(xdiff(3)));
     P_ += weights_(i)*xdiff*xdiff.transpose();
   }
 }
@@ -220,6 +219,27 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
 
   You'll also need to calculate the lidar NIS.
   */
+
+  MatrixXd H_laser(2,4);
+          H_laser << 1, 0, 0, 0,
+                     0, 1, 0, 0;
+  VectorXd z_pred = H_laser*x_;
+  VectorXd z(2);
+  z(0) = meas_package.raw_measurements_(0);
+  z(1) = meas_package.raw_measurements_(1);
+
+  VectorXd y = z - z_pred;
+  MatrixXd Ht = H_laser.tranpose();
+  MatrixXd S = H_laser*P_*Ht + R_;
+  MatrixXd Si = S.inverse();
+  MatrixXd PHt = P_*Ht;
+  MatrixXd K = PHt*Si;
+
+  x_ += K*y;
+  long x_size = x_.size();
+  MatrixXd I = MatrixXd::Identity(x_size,x_size);
+  P_ = (I - K*H_laser)*P_;
+
 }
 
 /**
@@ -236,10 +256,16 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   You'll also need to calculate the radar NIS.
   */
 
+  /// Predicted measurement
   int n_z = 3; /// Degrees of freedom for radar
   MatrixXd Zsig = MatrixXd(n_z, 2*n_aug_ + 1);
   VectorXd z_pred = VectorXd(n_z);
   MatrixXd S = MatrixXd(n_z,n_z);
+
+  VectorXd z = VectorXd(n_z);
+  z(0) = meas_package.raw_measurements_(0);
+  z(1) = meas_package.raw_measurements_(1);
+  z(2) = meas_package.raw_measurements_(2);
 
   for(int i = 0; i < 2*n_aug_ + 1; i++){
     double px = Xsig_pred_(0,i);
@@ -275,4 +301,26 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
 
   S += R;
 
+  /// Update state, gain, covariance
+
+  MatrixXd Tc = MatrixXd(n_x_, n_z);
+  Tc.fill(0.0);
+
+  for(int i = 0; i < 2*n_aug_ + 1; i++){
+    VectorXd x_diff = Xsig_pred_.col(i) - x_;
+    VectorXd z_diff = Zsig.col(i) - z_pred;
+
+    while (z_diff(1)> M_PI) z_diff(1)-=2.*M_PI;
+    while (z_diff(1)<-M_PI) z_diff(1)+=2.*M_PI;
+    while (x_diff(3)> M_PI) x_diff(3)-=2.*M_PI;
+    while (x_diff(3)<-M_PI) x_diff(3)-=2.*M_PI;
+
+    Tc += weights_(i)*x_diff*z_diff.transpose();
+  }
+
+  MatrixXd K = MatrixXd(n_x_, n_z);
+  K = Tc*S.inverse();
+
+  x_ += K*(z - z_pred);
+  P_ -= K*S*K.transpose();
 }
