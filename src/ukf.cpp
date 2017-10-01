@@ -124,7 +124,6 @@ void UKF::Prediction(double delta_t) {
 
   MatrixXd P_aug = MatrixXd(n_aug_,n_aug_);
   VectorXd x_aug_ = VectorXd(n_aug_);
-  MatrixXd Xsig = MatrixXd(n_x_,2*n_x_ + 1);
   MatrixXd Xsig_aug = MatrixXd(n_aug_,2*n_aug_ + 1);
 
   x_aug_.fill(0.0);
@@ -137,14 +136,52 @@ void UKF::Prediction(double delta_t) {
 
   MatrixXd A = P_aug.llt().matrixL();
 
-  Xsig.col(0) = x_aug_;
+  Xsig_aug.col(0) = x_aug_;
 
-  for(int i = 0; i < n_x_; i++) {
-    Xsig.col(i + 1) = x_aug_ + sqrt(lambda_ + n_aug_)*A.col(i);
-    Xsig.col(i + n_x_ + 1) = x_aug_ - sqrt(lambda_ + n_aug_)*A.col(i);
+  for(int i = 0; i < n_aug_; i++) {
+    Xsig_aug.col(i + 1) = x_aug_ + sqrt(lambda_ + n_aug_)*A.col(i);
+    Xsig_aug.col(i + n_aug_ + 1) = x_aug_ - sqrt(lambda_ + n_aug_)*A.col(i);
   }
 
+  for(int i = 0; i < 2*n_aug_ + 1; i++){
+    double px = Xsig_aug.col(i)(0);
+    double py = Xsig_aug.col(i)(1);
+    double v = Xsig_aug.col(i)(2);
+    double phi = Xsig_aug.col(i)(3);
+    double phidot = Xsig_aug.col(i)(4);
+    double nu_a = Xsig_aug.col(i)(5);
+    double nu_phidot = Xsig_aug.col(i)(6);
 
+    double px_p,py_p;
+
+    if(fabs(phidot) > 0.001){
+      px_p = px + v/phidot*(sin(phi + phidot*delta_t) - sin(phi));
+      py_p = py + v/phidot*(cos(phi) - cos(phi + phidot*delta_t));
+    }
+    else{
+      px_p = px + v*delta_t*cos(phi);
+      py_p = py + v*delta_t*sin(phi);
+    }
+
+    double v_p, phi_p, phidot_p;
+
+    v_p = v;
+    phi_p = phi + phidot*delta_t;
+    phidot_p  = phidot;
+
+    px_p += 0.5*nu_a*pow(delta_t,2.0)*cos(phi);
+    py_p += 0.5*nu_a*pow(delta_t,2.0)*sin(phi);
+    v_p += nu_a*delta_t;
+
+    phi_p += 0.5*nu_phidot*pow(delta_t,2.0);
+    phidot_p += nu_phidot*delta_t;
+
+    Xsig_pred_(0,i) = px_p;
+    Xsig_pred_(1,i) = py_p;
+    Xsig_pred_(2,i) = v_p;
+    Xsig_pred_(3,i) = phi_p;
+    Xsig_pred_(4,i) = phidot_p;
+  }
 
 }
 
