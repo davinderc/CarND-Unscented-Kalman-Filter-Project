@@ -54,9 +54,7 @@ UKF::UKF() {
 
   is_initialized_ = false;
 
-  x_ << 0,0,0,0,0;
 
-  P_ = MatrixXd::Identity(5,5);
 }
 
 UKF::~UKF() {}
@@ -72,6 +70,41 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
   Complete this function! Make sure you switch between lidar and radar
   measurements.
   */
+
+  delta_t =;
+  if (!is_initialized_) {
+    x_.fill(0.0);
+    n_x_ = 5;
+    n_aug_ = 7;
+    P_ = MatrixXd::Identity(n_x_,n_x_);
+
+    if (meas_package.sensor_type_ == MeasurementPackage::LASER) {
+      x_(0) = meas_package.raw_measurements_(0);
+      x_(1) = meas_package.raw_measurements_(1);
+    } else if (meas_package.sensor_type_ == MeasurementPackage::RADAR) {
+      double rho = meas_package.raw_measurements_(0);
+      double phi = meas_package.raw_measurements_(1);
+      double phidot = meas_package.raw_measurements_(2);
+
+      x_(0) = rho*cos(phi);
+      x_(1) = rho*sin(phi);
+    }
+    time_us_ = meas_package.timestamp_;
+    is_initialized_ = true;
+    return;
+  }
+
+
+  delta_t = (meas_package.timestamp_ - time_us_)/1000000.0;
+  Prediction(delta_t);
+  if (meas_package.sensor_type_ == MeasurementPackage::LASER) {
+    UpdateLidar(meas_package);
+  } else if (meas_package.sensor_type_ == MeasurementPackage::RADAR) {
+    UpdateRadar(meas_package);
+  }
+
+  time_us_ = meas_package.timestamp_;
+  return;
 }
 
 /**
@@ -86,6 +119,33 @@ void UKF::Prediction(double delta_t) {
   Complete this function! Estimate the object's location. Modify the state
   vector, x_. Predict sigma points, the state, and the state covariance matrix.
   */
+
+  double lambda_ = 3 - n_x_;
+
+  MatrixXd P_aug = MatrixXd(n_aug_,n_aug_);
+  VectorXd x_aug_ = VectorXd(n_aug_);
+  MatrixXd Xsig = MatrixXd(n_x_,2*n_x_ + 1);
+  MatrixXd Xsig_aug = MatrixXd(n_aug_,2*n_aug_ + 1);
+
+  x_aug_.fill(0.0);
+  x_aug_.head(n_x_) = x_;
+
+  P_aug.fill(0.0);
+  P_aug.topLeftCorner(n_x_,n_x_) = P_;
+  P_aug(5,5) = pow(std_a_,2.0);
+  P_aug(6,6) = pow(std_yawdd_,2.0);
+
+  MatrixXd A = P_aug.llt().matrixL();
+
+  Xsig.col(0) = x_aug_;
+
+  for(int i = 0; i < n_x_; i++) {
+    Xsig.col(i + 1) = x_aug_ + sqrt(lambda_ + n_aug_)*A.col(i);
+    Xsig.col(i + n_x_ + 1) = x_aug_ - sqrt(lambda_ + n_aug_)*A.col(i);
+  }
+
+
+
 }
 
 /**
