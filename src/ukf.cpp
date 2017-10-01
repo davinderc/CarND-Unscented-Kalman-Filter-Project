@@ -120,6 +120,7 @@ void UKF::Prediction(double delta_t) {
   vector, x_. Predict sigma points, the state, and the state covariance matrix.
   */
 
+  /// Augmented state and covariance
   double lambda_ = 3 - n_x_;
 
   MatrixXd P_aug = MatrixXd(n_aug_,n_aug_);
@@ -143,6 +144,8 @@ void UKF::Prediction(double delta_t) {
     Xsig_aug.col(i + n_aug_ + 1) = x_aug_ - sqrt(lambda_ + n_aug_)*A.col(i);
   }
 
+
+  /// Predicted mean and covariance
   for(int i = 0; i < 2*n_aug_ + 1; i++){
     double px = Xsig_aug.col(i)(0);
     double py = Xsig_aug.col(i)(1);
@@ -183,6 +186,24 @@ void UKF::Prediction(double delta_t) {
     Xsig_pred_(4,i) = phidot_p;
   }
 
+  VectorXd weights = VectorXd(n_aug_);
+  weights(0) = lambda_/(lambda_ + n_aug_);
+
+  for(int i = 1; i < 2*n_aug_ + 1; i++){
+    weights(i) = 1/(2*(lambda_+n_aug_));
+  }
+  x_.fill(0.0);
+  P_.fill(0.0);
+  for(int i = 0; i < 2*n_aug_ + 1; i++){
+    x_+= weights(i)*Xsig_pred_.col(i);
+  }
+
+  for(int i = 0; i < 2*n_aug_ + 1; i++){
+    VectorXd xdiff(n_x_);
+    xdiff = Xsig_pred_.col(i) - x_;
+    xdiff(3) = atan2(sin(xdiff(3)),cos(xdiff(3)_));
+    P_ += weights(i)*xdiff*xdiff.transpose();
+  }
 }
 
 /**
