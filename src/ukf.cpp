@@ -121,7 +121,7 @@ void UKF::Prediction(double delta_t) {
   */
 
   /// Augmented state and covariance
-  double lambda_ = 3 - n_x_;
+  lambda_ = 3 - n_x_;
 
   MatrixXd P_aug = MatrixXd(n_aug_,n_aug_);
   VectorXd x_aug_ = VectorXd(n_aug_);
@@ -186,23 +186,24 @@ void UKF::Prediction(double delta_t) {
     Xsig_pred_(4,i) = phidot_p;
   }
 
-  VectorXd weights = VectorXd(n_aug_);
-  weights(0) = lambda_/(lambda_ + n_aug_);
+  /// Predict state and covariance matrix
+  weights_ = VectorXd(n_aug_);
+  weights_(0) = lambda_/(lambda_ + n_aug_);
 
   for(int i = 1; i < 2*n_aug_ + 1; i++){
-    weights(i) = 1/(2*(lambda_+n_aug_));
+    weights_(i) = 1/(2*(lambda_+n_aug_));
   }
   x_.fill(0.0);
   P_.fill(0.0);
   for(int i = 0; i < 2*n_aug_ + 1; i++){
-    x_+= weights(i)*Xsig_pred_.col(i);
+    x_+= weights_(i)*Xsig_pred_.col(i);
   }
 
   for(int i = 0; i < 2*n_aug_ + 1; i++){
     VectorXd xdiff(n_x_);
     xdiff = Xsig_pred_.col(i) - x_;
     xdiff(3) = atan2(sin(xdiff(3)),cos(xdiff(3)_));
-    P_ += weights(i)*xdiff*xdiff.transpose();
+    P_ += weights_(i)*xdiff*xdiff.transpose();
   }
 }
 
@@ -234,4 +235,44 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
 
   You'll also need to calculate the radar NIS.
   */
+
+  int n_z = 3; /// Degrees of freedom for radar
+  MatrixXd Zsig = MatrixXd(n_z, 2*n_aug_ + 1);
+  VectorXd z_pred = VectorXd(n_z);
+  MatrixXd S = MatrixXd(n_z,n_z);
+
+  for(int i = 0; i < 2*n_aug_ + 1; i++){
+    double px = Xsig_pred_(0,i);
+    double py = Xsig_pred_(1,i);
+    double v = Xsig_pred_(2,i);
+    double phi = Xsig_pred_(3,i);
+    double phidot = Xsig_pred_(4,i);
+
+    Zsig(0,i) = sqrt(pow(px,2.0) + pow(py,2.0));
+    Zsig(1,i) = atan2(py,px);
+    Zsig(2,i) = (px*cos(phi)*v + py*sin(phi)*v)/Zsig(0,i);
+  }
+
+  z_pred.fill(0.0);
+  for(int i = 0; i < 2*n_aug_ + 1; i++){
+    z_pred += weights_(i)*Zsig.col(i);
+  }
+
+  S.fill(0.0);
+
+  MatrixXd R = MatrixXd(n_z,n_z);
+  R << pow(std_radr_,2.0), 0, 0,
+       0, pow(std_radphi_,2.0), 0,
+       0, 0, pow(std_radrd_,2.0);
+
+  for(int i = 0; i < 2*n_aug_ + 1; i++){
+    VectorXd z_diff = Zsig.col(i) - z_pred;
+
+    while(z_diff(1)> M_PI) z_diff(1)-=2.*M_PI;
+    while(z_diff(1)< M_PI) z_diff(1)+=2.*M_PI;
+    S += weights_(i)*z_diff*z_diff.transpose();
+  }
+
+  S += R;
+
 }
